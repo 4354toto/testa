@@ -1,0 +1,77 @@
+name: Daily News Auto Publisher
+
+on:
+  schedule:
+    # 每天 UTC 时间 1:00 执行（北京时间 9:00）
+    - cron: '0 1 * * *'
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  publish-news:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check Time
+      run: |
+        echo "🕐 执行时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo "🇨🇳 北京时间: $(date -d '+8 hours' '+%Y-%m-%d %H:%M:%S')"
+        echo "📰 开始发布每日资讯..."
+
+    - name: Trigger Coze Workflow
+      env:
+        COZE_TOKEN: ${{ secrets.COZE_TOKEN }}
+      run: |
+        echo "🔧 配置信息:"
+        echo "API端点: https://api.coze.cn/v1/workflow/stream_run"
+        echo "工作流ID: 7565827159563550756"
+        echo "Token长度: ${#COZE_TOKEN} 字符"
+        
+        echo "🚀 发送请求到扣子平台..."
+        
+        # 发送API请求
+        response=$(curl -s -w "HTTP_STATUS:%{http_code}" \
+          -X POST "https://api.coze.cn/v1/workflow/stream_run" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer $COZE_TOKEN" \
+          -d '{
+            "workflow_id": "7565827159563550756",
+            "parameters": {}
+          }')
+        
+        # 提取状态码和响应体
+        http_status=$(echo "$response" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d':' -f2)
+        response_body=$(echo "$response" | sed 's/HTTP_STATUS:[0-9]*//')
+        
+        echo "📊 响应状态码: $http_status"
+        echo "📄 响应内容: $response_body"
+        
+        # 判断结果
+        if [ "$http_status" -eq 200 ]; then
+          echo "✅ 工作流触发成功！"
+          echo "💬 请检查企微群是否收到消息"
+          exit 0
+        else
+          echo "❌ 工作流触发失败"
+          echo "🔍 请检查以下可能原因："
+          echo "  1. Token权限是否正确"
+          echo "  2. 工作流ID是否存在"
+          echo "  3. 工作流是否已发布"
+          exit 1
+        fi
+
+    - name: Success Notification
+      if: success()
+      run: |
+        echo "🎉 每日资讯自动发布任务完成！"
+        echo "✅ GitHub Actions 执行成功"
+        echo "⏰ 下次执行: 明天 09:00 (北京时间)"
+        echo "📱 请检查企微群消息"
+
+    - name: Failure Notification
+      if: failure()
+      run: |
+        echo "⚠️ 任务执行失败"
+        echo "💡 建议操作："
+        echo "  1. 检查扣子平台Token权限"
+        echo "  2. 确认工作流ID正确"
+        echo "  3. 在扣子平台手动测试工作流"
+        echo "  4. 查看上方详细错误信息"
